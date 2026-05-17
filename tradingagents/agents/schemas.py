@@ -121,7 +121,8 @@ class TraderProposal(BaseModel):
     reasoning: str = Field(
         description=(
             "The case for this action, anchored in the analysts' reports and "
-            "the research plan. Two to four sentences."
+            "the research plan. Two to four sentences. "
+            "Never use words like 'guaranteed return', 'sure thing', or 'risk-free'."
         ),
     )
     entry_price: Optional[float] = Field(
@@ -193,7 +194,10 @@ class PortfolioDecision(BaseModel):
         description=(
             "Detailed reasoning anchored in specific evidence from the analysts' "
             "debate. If prior lessons are referenced in the prompt context, "
-            "incorporate them; otherwise rely solely on the current analysis."
+            "incorporate them; otherwise rely solely on the current analysis. "
+            "IMPORTANT COMPLIANCE RULE: You MUST end this section with the exact phrase: "
+            "'This output is for research purposes only and is not financial advice.' "
+            "Never use words like 'guaranteed return', 'sure thing', or 'risk-free'."
         ),
     )
     price_target: Optional[float] = Field(

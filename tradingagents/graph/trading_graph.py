@@ -52,7 +52,7 @@ class TradingAgentsGraph:
 
     def __init__(
         self,
-        selected_analysts=["market", "social", "news", "fundamentals"],
+        selected_analysts=["market", "social", "news", "fundamentals", "macro", "whale", "volatility"],
         debug=False,
         config: Dict[str, Any] = None,
         callbacks: Optional[List] = None,
@@ -188,6 +188,9 @@ class TradingAgentsGraph:
                     get_income_statement,
                 ]
             ),
+            "macro": ToolNode([get_global_news]),
+            "whale": ToolNode([get_insider_transactions]),
+            "volatility": ToolNode([get_stock_data, get_indicators]),
         }
 
     def _resolve_benchmark(self, ticker: str) -> str:
@@ -389,6 +392,9 @@ class TradingAgentsGraph:
             "sentiment_report": final_state["sentiment_report"],
             "news_report": final_state["news_report"],
             "fundamentals_report": final_state["fundamentals_report"],
+            "macro_report": final_state.get("macro_report", ""),
+            "whale_report": final_state.get("whale_report", ""),
+            "volatility_report": final_state.get("volatility_report", ""),
             "investment_debate_state": {
                 "bull_history": final_state["investment_debate_state"]["bull_history"],
                 "bear_history": final_state["investment_debate_state"]["bear_history"],
@@ -410,6 +416,8 @@ class TradingAgentsGraph:
             },
             "investment_plan": final_state["investment_plan"],
             "final_trade_decision": final_state["final_trade_decision"],
+            "execution_plan": final_state.get("execution_plan", "Not executed"),
+            "tax_event_signal": final_state.get("tax_event_signal", "No tax analysis performed")
         }
 
         # Save to file. Reject ticker values that would escape the

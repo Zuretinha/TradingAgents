@@ -7,6 +7,12 @@ from langgraph.prebuilt import ToolNode
 from tradingagents.agents import *
 from tradingagents.agents.utils.agent_states import AgentState
 
+from tradingagents.agents.analysts.macro_analyst import create_macro_analyst
+from tradingagents.agents.analysts.whale_analyst import create_whale_analyst
+from tradingagents.agents.analysts.volatility_analyst import create_volatility_analyst
+from tradingagents.agents.trader.execution_router import create_execution_router
+from tradingagents.agents.trader.tax_event_classifier import create_tax_event_classifier
+
 from .conditional_logic import ConditionalLogic
 
 
@@ -78,6 +84,21 @@ class GraphSetup:
             delete_nodes["fundamentals"] = create_msg_delete()
             tool_nodes["fundamentals"] = self.tool_nodes["fundamentals"]
 
+        if "macro" in selected_analysts:
+            analyst_nodes["macro"] = create_macro_analyst(self.quick_thinking_llm)
+            delete_nodes["macro"] = create_msg_delete()
+            tool_nodes["macro"] = self.tool_nodes["macro"]
+
+        if "whale" in selected_analysts:
+            analyst_nodes["whale"] = create_whale_analyst(self.quick_thinking_llm)
+            delete_nodes["whale"] = create_msg_delete()
+            tool_nodes["whale"] = self.tool_nodes["whale"]
+
+        if "volatility" in selected_analysts:
+            analyst_nodes["volatility"] = create_volatility_analyst(self.quick_thinking_llm)
+            delete_nodes["volatility"] = create_msg_delete()
+            tool_nodes["volatility"] = self.tool_nodes["volatility"]
+
         # Create researcher and manager nodes
         bull_researcher_node = create_bull_researcher(self.quick_thinking_llm)
         bear_researcher_node = create_bear_researcher(self.quick_thinking_llm)
@@ -89,6 +110,8 @@ class GraphSetup:
         neutral_analyst = create_neutral_debator(self.quick_thinking_llm)
         conservative_analyst = create_conservative_debator(self.quick_thinking_llm)
         portfolio_manager_node = create_portfolio_manager(self.deep_thinking_llm)
+        tax_event_classifier_node = create_tax_event_classifier(self.quick_thinking_llm)
+        execution_router_node = create_execution_router(self.quick_thinking_llm)
 
         # Create workflow
         workflow = StateGraph(AgentState)
@@ -110,6 +133,8 @@ class GraphSetup:
         workflow.add_node("Neutral Analyst", neutral_analyst)
         workflow.add_node("Conservative Analyst", conservative_analyst)
         workflow.add_node("Portfolio Manager", portfolio_manager_node)
+        workflow.add_node("Tax Event Classifier", tax_event_classifier_node)
+        workflow.add_node("Execution Router", execution_router_node)
 
         # Define edges
         # Start with the first analyst
@@ -181,6 +206,8 @@ class GraphSetup:
             },
         )
 
-        workflow.add_edge("Portfolio Manager", END)
+        workflow.add_edge("Portfolio Manager", "Tax Event Classifier")
+        workflow.add_edge("Tax Event Classifier", "Execution Router")
+        workflow.add_edge("Execution Router", END)
 
         return workflow

@@ -8,10 +8,13 @@ def create_bull_researcher(llm):
         bull_history = investment_debate_state.get("bull_history", "")
 
         current_response = investment_debate_state.get("current_response", "")
-        market_research_report = state["market_report"]
-        sentiment_report = state["sentiment_report"]
-        news_report = state["news_report"]
-        fundamentals_report = state["fundamentals_report"]
+        market_research_report = state.get("market_report", "Not available")
+        sentiment_report = state.get("sentiment_report", "Not available")
+        news_report = state.get("news_report", "Not available")
+        fundamentals_report = state.get("fundamentals_report", "Not available")
+        macro_report = state.get("macro_report", "Not available")
+        whale_report = state.get("whale_report", "Not available")
+        volatility_report = state.get("volatility_report", "Not available")
 
         prompt = f"""You are a Bull Analyst advocating for investing in the stock. Your task is to build a strong, evidence-based case emphasizing growth potential, competitive advantages, and positive market indicators. Leverage the provided research and data to address concerns and counter bearish arguments effectively.
 
@@ -27,6 +30,9 @@ Market research report: {market_research_report}
 Social media sentiment report: {sentiment_report}
 Latest world affairs news: {news_report}
 Company fundamentals report: {fundamentals_report}
+Macroeconomic Strategist report: {macro_report}
+Whale / Insider Tracker report: {whale_report}
+Volatility Analyst report: {volatility_report}
 Conversation history of the debate: {history}
 Last bear argument: {current_response}
 Use this information to deliver a compelling bull argument, refute the bear's concerns, and engage in a dynamic debate that demonstrates the strengths of the bull position.
