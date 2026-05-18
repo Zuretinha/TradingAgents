@@ -189,7 +189,7 @@ class TradingAgentsGraph:
                 ]
             ),
             "macro": ToolNode([get_global_news]),
-            "whale": ToolNode([get_insider_transactions]),
+            "whale": ToolNode([get_insider_transactions, get_global_news]),
             "volatility": ToolNode([get_stock_data, get_indicators]),
         }
 
