@@ -52,6 +52,15 @@ def build_instrument_context(ticker: str) -> str:
             base_context += f"\n\n{asx_context}"
         except Exception:
             pass
+    elif ticker.endswith("-USD") or ticker.endswith("-AUD") or ticker.endswith("-EUR"):
+        import os
+        try:
+            prompt_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "07_prompts", "crypto_context_prompt.md"))
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                crypto_context = f.read()
+            base_context += f"\n\n{crypto_context}"
+        except Exception:
+            pass
     return base_context
 
 def create_msg_delete():

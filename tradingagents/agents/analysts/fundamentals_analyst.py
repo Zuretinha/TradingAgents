@@ -14,7 +14,17 @@ from tradingagents.dataflows.config import get_config
 def create_fundamentals_analyst(llm):
     def fundamentals_analyst_node(state):
         current_date = state["trade_date"]
-        instrument_context = build_instrument_context(state["company_of_interest"])
+        ticker = state["company_of_interest"]
+        instrument_context = build_instrument_context(ticker)
+
+        # WP-04: Crypto Bypass
+        if ticker.endswith("-USD") or ticker.endswith("-AUD") or ticker.endswith("-EUR"):
+            from langchain_core.messages import AIMessage
+            skip_msg = AIMessage(content="Fundamentals Analyst bypassed: Ticker is a cryptocurrency. Cryptocurrencies do not have traditional SEC financial statements (Balance Sheet, Income Statement, Cash Flow). Rely on the Macro Strategist, Whale Tracker, and Volatility Analyst for core network evaluation.")
+            return {
+                "messages": [skip_msg],
+                "fundamentals_report": skip_msg.content,
+            }
 
         tools = [
             get_fundamentals,
