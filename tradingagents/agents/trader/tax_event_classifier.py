@@ -89,7 +89,44 @@ Format your response as a JSON object with keys: estimated_gain_aud, cgt_discoun
 This is an estimate for research purposes only. Consult your tax agent for verified calculations.{get_language_instruction()}"""
 
         response = llm.invoke(prompt)
-        tax_signal = f"**Tax Event Classification for {ticker}**\n\n{response.content}"
+        content = response.content
+        
+        # Try to parse the JSON and hit the WP-03 API
+        try:
+            import re
+            import requests
+            
+            # Extract JSON block if it's wrapped in markdown
+            json_str = content
+            match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
+            if match:
+                json_str = match.group(1)
+                
+            tax_data = json.loads(json_str)
+            
+            # Construct payload for API
+            payload = {
+                "account": account.get('account_name', 'Unknown'),
+                "ticker": ticker,
+                "action": "SELL",
+                "units": float(units),
+                "estimated_gain_aud": float(tax_data.get("estimated_gain_aud", 0)),
+                "cgt_discount_applicable": bool(tax_data.get("cgt_discount_applicable", False)),
+                "smsf_flags": str(tax_data.get("smsf_flags", "")),
+                "advisory_note": str(tax_data.get("advisory_note", ""))
+            }
+            
+            try:
+                # Send to Tax Casework Intelligence API (port 8001)
+                res = requests.post("http://localhost:8001/flag/tax-event", json=payload, timeout=2)
+                api_result = f"\n\n*Signal successfully sent to Tax Casework Intelligence API (Status {res.status_code})*"
+            except requests.exceptions.RequestException:
+                api_result = "\n\n*(Tax Casework Intelligence API offline — signal not logged)*"
+                
+        except Exception:
+            api_result = "\n\n*(Failed to parse LLM response into strict JSON for API)*"
+
+        tax_signal = f"**Tax Event Classification for {ticker}**\n\n{content}{api_result}"
 
         return {"tax_event_signal": tax_signal}
 
