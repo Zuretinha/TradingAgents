@@ -5,11 +5,16 @@ import json
 from datetime import datetime
 from dotenv import load_dotenv
 
+# Execute ZuretaClaw master secrets router dynamically
+_ms_path = r"C:\cloud_files\OneDrive - Safe Working Solutions Pty Ltd\00_master_hub\04_operations\Antigravity\01_projects\zuretaclaw\05_runtime\master_secrets.py"
+if os.path.exists(_ms_path):
+    exec(open(_ms_path).read())
+    init_master_secrets()
+else:
+    load_dotenv()
+
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
-
-# Load environment variables
-load_dotenv()
 
 app = FastAPI(title="Trading Agents Integration API", description="ZuretaClaw n8n Integration Gateway")
 
