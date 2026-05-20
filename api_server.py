@@ -43,6 +43,11 @@ class AnalysisResponse(BaseModel):
     advisory_disclaimer: str
     runtime: Dict[str, Any]
     validation_snapshot: Dict[str, Any]
+    research_summary: Dict[str, Any]
+    research_artifacts: Dict[str, Any]
+    signal_handoff: Dict[str, Any]
+    review_status: Dict[str, Any]
+    experiment_context: Dict[str, Any]
 
 @app.post("/analyze", response_model=AnalysisResponse)
 def analyze_ticker(request: AnalysisRequest):
