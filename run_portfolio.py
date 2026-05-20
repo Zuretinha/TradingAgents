@@ -11,6 +11,14 @@ from dotenv import load_dotenv
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
+from tradingagents.runtime_support import (
+    ADVISORY_DISCLAIMER,
+    build_export_record,
+    build_runtime_config,
+    export_json,
+    ticker_filename,
+    utc_now_iso,
+)
 
 
 def load_portfolio(account_name: str) -> dict:
@@ -27,20 +35,7 @@ def load_portfolio(account_name: str) -> dict:
 
 def build_config(ticker: str) -> dict:
     """Build a config dict with ASX overrides if needed."""
-    config = DEFAULT_CONFIG.copy()
-    config["llm_provider"] = "openai"
-    config["deep_think_llm"] = "gpt-4o"
-    config["quick_think_llm"] = "gpt-4o-mini"
-    config["max_debate_rounds"] = 2
-
-    if ticker.endswith(".AX"):
-        config["global_news_queries"] = [
-            "Reserve Bank of Australia RBA interest rates inflation",
-            "ASX 200 earnings Australian economic outlook",
-            "geopolitical risk trade China Australia",
-            "iron ore copper gold mining commodities",
-        ]
-    return config
+    return build_runtime_config(DEFAULT_CONFIG, ticker, max_debate_rounds=2)
 
 
 def calculate_holding_context(holding: dict, portfolio: dict) -> str:
@@ -132,41 +127,51 @@ def run_portfolio_analysis(account_name: str, trade_date: str = None):
 
         config = build_config(ticker)
         portfolio_context = calculate_holding_context(holding, portfolio)
+        portfolio_record = {
+            "account": {
+                key: value
+                for key, value in portfolio.items()
+                if key != "holdings"
+            },
+            "holding": holding,
+        }
 
         try:
             ta = TradingAgentsGraph(debug=False, config=config)
-            # Inject portfolio context into the propagation
-            state, decision = ta.propagate(ticker, trade_date)
+            state, decision = ta.propagate(
+                ticker,
+                trade_date,
+                portfolio_context=portfolio_context,
+                portfolio_record=portfolio_record,
+            )
 
-            result = {
-                "ticker": ticker,
-                "decision": decision,
-                "full_report": state.get("final_trade_decision", ""),
-                "execution_plan": state.get("execution_plan", ""),
-                "portfolio_context": portfolio_context,
-                "units": holding.get("units", 0),
-                "cost_basis": holding.get("cost_basis_per_unit", 0),
-                "acquisition_date": holding.get("acquisition_date", ""),
-            }
+            result = build_export_record(
+                ticker,
+                trade_date,
+                state,
+                decision,
+                config,
+                export_kind="portfolio_holding",
+                extra={
+                    "portfolio_context": portfolio_context,
+                    "portfolio_record": portfolio_record,
+                    "units": holding.get("units", 0),
+                    "cost_basis": holding.get("cost_basis_per_unit", 0),
+                    "acquisition_date": holding.get("acquisition_date", ""),
+                },
+            )
             results.append(result)
             print(f"    → Decision: {decision}")
         except Exception as e:
             print(f"    ✗ Error analysing {ticker}: {e}")
             results.append({"ticker": ticker, "decision": "ERROR", "error": str(e)})
 
-    # Save aggregated results
-    export_dir = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "..", "05_exports", "portfolio_reports")
-    )
-    os.makedirs(export_dir, exist_ok=True)
-
-    safe_name = account_name.lower().replace(" ", "_")
-    export_file = os.path.join(export_dir, f"{safe_name}_portfolio_{trade_date.replace('-', '_')}.json")
-
     report = {
         "account_name": portfolio["account_name"],
         "account_type": portfolio["account_type"],
         "trade_date": trade_date,
+        "generated_at_utc": utc_now_iso(),
+        "advisory_disclaimer": ADVISORY_DISCLAIMER,
         "total_holdings_analysed": len(results),
         "summary": {
             "buy": sum(1 for r in results if r.get("decision", "").lower() in ["buy", "overweight"]),
@@ -174,11 +179,28 @@ def run_portfolio_analysis(account_name: str, trade_date: str = None):
             "sell": sum(1 for r in results if r.get("decision", "").lower() in ["sell", "underweight"]),
             "error": sum(1 for r in results if r.get("decision", "").lower() == "error"),
         },
+        "validation_summary": {
+            "write_enabled_holdings": sum(
+                1
+                for r in results
+                if r.get("runtime", {}).get("filesystem_write_enabled") is True
+            ),
+            "tax_dispatch_enabled_holdings": sum(
+                1
+                for r in results
+                if r.get("runtime", {}).get("tax_casework_api_enabled") is True
+            ),
+        },
         "holdings": results,
     }
 
-    with open(export_file, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2)
+    safe_name = account_name.lower().replace(" ", "_")
+    export_file = export_json(
+        report,
+        "05_exports",
+        "portfolio_reports",
+        f"{safe_name}_portfolio_{trade_date.replace('-', '_')}.json",
+    )
 
     print(f"\n{'='*60}")
     print(f"PORTFOLIO REPORT SAVED: {export_file}")

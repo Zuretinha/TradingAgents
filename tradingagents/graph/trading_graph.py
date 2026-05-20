@@ -68,13 +68,27 @@ class TradingAgentsGraph:
         self.debug = debug
         self.config = config or DEFAULT_CONFIG
         self.callbacks = callbacks or []
+        self.filesystem_write_enabled = bool(
+            self.config.get("filesystem_write_enabled", True)
+        )
+        self.state_logging_enabled = bool(
+            self.filesystem_write_enabled
+            and self.config.get("state_logging_enabled", True)
+        )
+        self.checkpoint_enabled = bool(self.config.get("checkpoint_enabled", False))
+        if self.checkpoint_enabled and not self.filesystem_write_enabled:
+            logger.warning(
+                "Checkpointing requested with filesystem writes disabled; disabling checkpoints."
+            )
+            self.checkpoint_enabled = False
 
         # Update the interface's config
         set_config(self.config)
 
         # Create necessary directories
-        os.makedirs(self.config["data_cache_dir"], exist_ok=True)
-        os.makedirs(self.config["results_dir"], exist_ok=True)
+        if self.filesystem_write_enabled:
+            os.makedirs(self.config["data_cache_dir"], exist_ok=True)
+            os.makedirs(self.config["results_dir"], exist_ok=True)
 
         # Initialize LLMs with provider-specific thinking configuration
         llm_kwargs = self._get_provider_kwargs()
@@ -114,6 +128,7 @@ class TradingAgentsGraph:
             self.deep_thinking_llm,
             self.tool_nodes,
             self.conditional_logic,
+            config=self.config,
         )
 
         self.propagator = Propagator(
@@ -131,6 +146,13 @@ class TradingAgentsGraph:
         self.workflow = self.graph_setup.setup_graph(selected_analysts)
         self.graph = self.workflow.compile()
         self._checkpointer_ctx = None
+
+    def _runtime_flag(self, attr_name: str, config_key: str, default: bool) -> bool:
+        """Return a runtime bool, falling back cleanly for partial test doubles."""
+        attr_value = getattr(self, attr_name, None)
+        if isinstance(attr_value, bool):
+            return attr_value
+        return bool(self.config.get(config_key, default))
 
     def _get_provider_kwargs(self) -> Dict[str, Any]:
         """Get provider-specific kwargs for LLM client creation."""
@@ -294,7 +316,13 @@ class TradingAgentsGraph:
         if updates:
             self.memory_log.batch_update_with_outcomes(updates)
 
-    def propagate(self, company_name, trade_date):
+    def propagate(
+        self,
+        company_name,
+        trade_date,
+        portfolio_context: str = "",
+        portfolio_record: Optional[Dict[str, Any]] = None,
+    ):
         """Run the trading agents graph for a company on a specific date.
 
         When ``checkpoint_enabled`` is set in config, the graph is recompiled
@@ -307,7 +335,11 @@ class TradingAgentsGraph:
         self._resolve_pending_entries(company_name)
 
         # Recompile with a checkpointer if the user opted in.
-        if self.config.get("checkpoint_enabled"):
+        checkpoint_enabled = TradingAgentsGraph._runtime_flag(
+            self,
+            "checkpoint_enabled", "checkpoint_enabled", False
+        )
+        if checkpoint_enabled:
             self._checkpointer_ctx = get_checkpointer(
                 self.config["data_cache_dir"], company_name
             )
@@ -325,24 +357,42 @@ class TradingAgentsGraph:
                 logger.info("Starting fresh for %s on %s", company_name, trade_date)
 
         try:
-            return self._run_graph(company_name, trade_date)
+            return self._run_graph(
+                company_name,
+                trade_date,
+                portfolio_context=portfolio_context,
+                portfolio_record=portfolio_record,
+            )
         finally:
             if self._checkpointer_ctx is not None:
                 self._checkpointer_ctx.__exit__(None, None, None)
                 self._checkpointer_ctx = None
                 self.graph = self.workflow.compile()
 
-    def _run_graph(self, company_name, trade_date):
+    def _run_graph(
+        self,
+        company_name,
+        trade_date,
+        portfolio_context: str = "",
+        portfolio_record: Optional[Dict[str, Any]] = None,
+    ):
         """Execute the graph and write the resulting state to disk and memory log."""
         # Initialize state — inject memory log context for PM.
         past_context = self.memory_log.get_past_context(company_name)
         init_agent_state = self.propagator.create_initial_state(
-            company_name, trade_date, past_context=past_context
+            company_name,
+            trade_date,
+            past_context=past_context,
+            portfolio_context=portfolio_context,
+            portfolio_record=portfolio_record,
         )
         args = self.propagator.get_graph_args()
+        checkpoint_enabled = TradingAgentsGraph._runtime_flag(
+            self, "checkpoint_enabled", "checkpoint_enabled", False
+        )
 
         # Inject thread_id so same ticker+date resumes, different date starts fresh.
-        if self.config.get("checkpoint_enabled"):
+        if checkpoint_enabled:
             tid = thread_id(company_name, str(trade_date))
             args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = tid
 
@@ -376,7 +426,7 @@ class TradingAgentsGraph:
         )
 
         # Clear checkpoint on successful completion to avoid stale state.
-        if self.config.get("checkpoint_enabled"):
+        if checkpoint_enabled:
             clear_checkpoint(
                 self.config["data_cache_dir"], company_name, str(trade_date)
             )
@@ -385,6 +435,11 @@ class TradingAgentsGraph:
 
     def _log_state(self, trade_date, final_state):
         """Log the final state to a JSON file."""
+        if not TradingAgentsGraph._runtime_flag(
+            self, "state_logging_enabled", "state_logging_enabled", True
+        ):
+            return
+
         self.log_states_dict[str(trade_date)] = {
             "company_of_interest": final_state["company_of_interest"],
             "trade_date": final_state["trade_date"],
@@ -417,7 +472,31 @@ class TradingAgentsGraph:
             "investment_plan": final_state["investment_plan"],
             "final_trade_decision": final_state["final_trade_decision"],
             "execution_plan": final_state.get("execution_plan", "Not executed"),
-            "tax_event_signal": final_state.get("tax_event_signal", "No tax analysis performed")
+            "tax_event_signal": final_state.get(
+                "tax_event_signal", "No tax analysis performed"
+            ),
+            "portfolio_context": final_state.get("portfolio_context", ""),
+            "portfolio_record": final_state.get("portfolio_record", {}),
+            "runtime_controls": {
+                "filesystem_write_enabled": TradingAgentsGraph._runtime_flag(
+                    self,
+                    "filesystem_write_enabled", "filesystem_write_enabled", True
+                ),
+                "state_logging_enabled": TradingAgentsGraph._runtime_flag(
+                    self,
+                    "state_logging_enabled", "state_logging_enabled", True
+                ),
+                "memory_log_enabled": bool(
+                    self.config.get("memory_log_enabled", True)
+                ),
+                "checkpoint_enabled": TradingAgentsGraph._runtime_flag(
+                    self,
+                    "checkpoint_enabled", "checkpoint_enabled", False
+                ),
+                "tax_casework_api_enabled": bool(
+                    self.config.get("tax_casework_api_enabled", False)
+                ),
+            },
         }
 
         # Save to file. Reject ticker values that would escape the

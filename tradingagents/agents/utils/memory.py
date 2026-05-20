@@ -20,6 +20,10 @@ class TradingMemoryLog:
         cfg = config or {}
         self._log_path = None
         path = cfg.get("memory_log_path")
+        writes_enabled = cfg.get("filesystem_write_enabled", True)
+        memory_enabled = cfg.get("memory_log_enabled", True)
+        if not writes_enabled or not memory_enabled:
+            path = None
         if path:
             self._log_path = Path(path).expanduser()
             self._log_path.parent.mkdir(parents=True, exist_ok=True)

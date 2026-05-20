@@ -25,12 +25,14 @@ class GraphSetup:
         deep_thinking_llm: Any,
         tool_nodes: Dict[str, ToolNode],
         conditional_logic: ConditionalLogic,
+        config: Dict[str, Any] | None = None,
     ):
         """Initialize with required components."""
         self.quick_thinking_llm = quick_thinking_llm
         self.deep_thinking_llm = deep_thinking_llm
         self.tool_nodes = tool_nodes
         self.conditional_logic = conditional_logic
+        self.config = config or {}
 
     def setup_graph(
         self, selected_analysts=["market", "social", "news", "fundamentals"]
@@ -110,7 +112,9 @@ class GraphSetup:
         neutral_analyst = create_neutral_debator(self.quick_thinking_llm)
         conservative_analyst = create_conservative_debator(self.quick_thinking_llm)
         portfolio_manager_node = create_portfolio_manager(self.deep_thinking_llm)
-        tax_event_classifier_node = create_tax_event_classifier(self.quick_thinking_llm)
+        tax_event_classifier_node = create_tax_event_classifier(
+            self.quick_thinking_llm, self.config
+        )
         execution_router_node = create_execution_router(self.quick_thinking_llm)
 
         # Create workflow

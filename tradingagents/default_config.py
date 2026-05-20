@@ -1,6 +1,10 @@
 import os
+from pathlib import Path
 
-_TRADINGAGENTS_HOME = os.path.join(os.path.expanduser("~"), ".tradingagents")
+_PROJECT_ROOT = Path(__file__).resolve().parents[4]
+_PROJECT_EXPORTS_DIR = _PROJECT_ROOT / "05_exports" / "runtime_logs"
+_PROJECT_CACHE_DIR = _PROJECT_ROOT / "06_data" / "cache"
+_PROJECT_MEMORY_LOG = _PROJECT_ROOT / "06_data" / "memory" / "trading_memory.md"
 
 # Single source of truth for env-var → config-key overrides. To expose
 # a new config key for environment-based override, add a row here — no
@@ -17,6 +21,11 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_MAX_RISK_ROUNDS":      "max_risk_discuss_rounds",
     "TRADINGAGENTS_CHECKPOINT_ENABLED":   "checkpoint_enabled",
     "TRADINGAGENTS_BENCHMARK_TICKER":     "benchmark_ticker",
+    "TRADINGAGENTS_FILESYSTEM_WRITE_ENABLED": "filesystem_write_enabled",
+    "TRADINGAGENTS_STATE_LOGGING_ENABLED": "state_logging_enabled",
+    "TRADINGAGENTS_MEMORY_LOG_ENABLED":   "memory_log_enabled",
+    "TRADINGAGENTS_TAX_CASEWORK_API_ENABLED": "tax_casework_api_enabled",
+    "TRADINGAGENTS_TAX_CASEWORK_API_URL": "tax_casework_api_url",
 }
 
 
@@ -43,13 +52,20 @@ def _apply_env_overrides(config: dict) -> dict:
 
 DEFAULT_CONFIG = _apply_env_overrides({
     "project_dir": os.path.abspath(os.path.join(os.path.dirname(__file__), ".")),
-    "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR", os.path.join(_TRADINGAGENTS_HOME, "logs")),
-    "data_cache_dir": os.getenv("TRADINGAGENTS_CACHE_DIR", os.path.join(_TRADINGAGENTS_HOME, "cache")),
-    "memory_log_path": os.getenv("TRADINGAGENTS_MEMORY_LOG_PATH", os.path.join(_TRADINGAGENTS_HOME, "memory", "trading_memory.md")),
+    "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR", str(_PROJECT_EXPORTS_DIR)),
+    "data_cache_dir": os.getenv("TRADINGAGENTS_CACHE_DIR", str(_PROJECT_CACHE_DIR)),
+    "memory_log_path": os.getenv("TRADINGAGENTS_MEMORY_LOG_PATH", str(_PROJECT_MEMORY_LOG)),
     # Optional cap on the number of resolved memory log entries. When set,
     # the oldest resolved entries are pruned once this limit is exceeded.
     # Pending entries are never pruned. None disables rotation entirely.
     "memory_log_max_entries": None,
+    # Runtime side-effect controls. These default to enabled for local project
+    # use, but can be disabled by shared read-only executors.
+    "filesystem_write_enabled": True,
+    "state_logging_enabled": True,
+    "memory_log_enabled": True,
+    "tax_casework_api_enabled": False,
+    "tax_casework_api_url": "http://localhost:8001/flag/tax-event",
     # LLM settings
     "llm_provider": "openai",
     "deep_think_llm": "gpt-5.4",

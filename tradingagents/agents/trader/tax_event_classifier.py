@@ -10,20 +10,14 @@ from datetime import datetime
 from tradingagents.agents.utils.agent_utils import get_language_instruction
 
 
-def create_tax_event_classifier(llm):
+def create_tax_event_classifier(llm, config=None):
     """Create a tax event classifier node for the trading graph."""
+    cfg = config or {}
 
     def tax_event_classifier_node(state) -> dict:
         final_decision = state.get("final_trade_decision", "")
         ticker = state.get("company_of_interest", "")
         trade_date_str = state.get("trade_date", datetime.now().strftime("%Y-%m-%d"))
-
-        # Load portfolio context if available
-        portfolio_context = _load_portfolio_context(ticker)
-
-        if not portfolio_context:
-            # No portfolio data — pass through without tax analysis
-            return {"tax_event_signal": "No portfolio data available for tax event classification."}
 
         # Determine if the decision involves a sell action
         decision_lower = final_decision.lower()
@@ -31,6 +25,15 @@ def create_tax_event_classifier(llm):
 
         if not is_sell:
             return {"tax_event_signal": "No tax event — decision does not involve a disposal."}
+
+        portfolio_context = state.get("portfolio_record") or _load_portfolio_context(ticker)
+        if not portfolio_context:
+            return {
+                "tax_event_signal": (
+                    "Tax review skipped — no governed portfolio data was available "
+                    "for disposal analysis."
+                )
+            }
 
         # Calculate CGT details
         holding = portfolio_context["holding"]
@@ -91,10 +94,9 @@ This is an estimate for research purposes only. Consult your tax agent for verif
         response = llm.invoke(prompt)
         content = response.content
         
-        # Try to parse the JSON and hit the WP-03 API
+        # Try to parse the JSON and optionally dispatch through the controlled API.
         try:
             import re
-            import requests
             
             # Extract JSON block if it's wrapped in markdown
             json_str = content
@@ -115,22 +117,43 @@ This is an estimate for research purposes only. Consult your tax agent for verif
                 "smsf_flags": str(tax_data.get("smsf_flags", "")),
                 "advisory_note": str(tax_data.get("advisory_note", ""))
             }
-            
-            try:
-                # Send to Tax Casework Intelligence API (port 8001)
-                res = requests.post("http://localhost:8001/flag/tax-event", json=payload, timeout=2)
-                api_result = f"\n\n*Signal successfully sent to Tax Casework Intelligence API (Status {res.status_code})*"
-            except requests.exceptions.RequestException:
-                api_result = "\n\n*(Tax Casework Intelligence API offline — signal not logged)*"
+            api_result = _dispatch_tax_event(payload, cfg)
                 
         except Exception:
-            api_result = "\n\n*(Failed to parse LLM response into strict JSON for API)*"
+            api_result = (
+                "\n\n*(Failed to parse the LLM response into strict JSON, so no "
+                "downstream tax signal was dispatched.)*"
+            )
 
         tax_signal = f"**Tax Event Classification for {ticker}**\n\n{content}{api_result}"
 
         return {"tax_event_signal": tax_signal}
 
     return tax_event_classifier_node
+
+
+def _dispatch_tax_event(payload: dict, config: dict) -> str:
+    if not config.get("tax_casework_api_enabled", False):
+        return "\n\n*(Controlled tax dispatch disabled by configuration; no downstream action taken.)*"
+
+    api_url = config.get(
+        "tax_casework_api_url",
+        "http://localhost:8001/flag/tax-event",
+    )
+
+    try:
+        import requests
+
+        res = requests.post(api_url, json=payload, timeout=2)
+        return (
+            f"\n\n*(Signal sent to Tax Casework Intelligence API at {api_url} "
+            f"(status {res.status_code}).)*"
+        )
+    except requests.exceptions.RequestException:
+        return (
+            "\n\n*(Tax Casework Intelligence API was unreachable; no downstream "
+            "action was completed.)*"
+        )
 
 
 def _load_portfolio_context(ticker: str) -> dict | None:

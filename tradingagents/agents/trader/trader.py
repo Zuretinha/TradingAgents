@@ -24,6 +24,12 @@ def create_trader(llm):
         company_name = state["company_of_interest"]
         instrument_context = build_instrument_context(company_name)
         investment_plan = state["investment_plan"]
+        portfolio_context = state.get("portfolio_context", "")
+        portfolio_line = (
+            f"\n\nPortfolio context for this holding:\n{portfolio_context}"
+            if portfolio_context
+            else ""
+        )
 
         messages = [
             {
@@ -42,7 +48,8 @@ def create_trader(llm):
                     f"plan tailored for {company_name}. {instrument_context} This plan incorporates "
                     f"insights from current technical market trends, macroeconomic indicators, and "
                     f"social media sentiment. Use this plan as a foundation for evaluating your next "
-                    f"trading decision.\n\nProposed Investment Plan: {investment_plan}\n\n"
+                    f"trading decision.\n\nProposed Investment Plan: {investment_plan}"
+                    f"{portfolio_line}\n\n"
                     f"Leverage these insights to make an informed and strategic decision."
                 ),
             },
