@@ -7,7 +7,6 @@ import os
 import json
 import sys
 from datetime import datetime
-from dotenv import load_dotenv
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
@@ -104,7 +103,6 @@ def calculate_holding_context(holding: dict, portfolio: dict) -> str:
 
 def run_portfolio_analysis(account_name: str, trade_date: str = None):
     """Run the full pipeline for every holding in a portfolio."""
-    load_dotenv()
     trade_date = trade_date or datetime.now().strftime("%Y-%m-%d")
 
     portfolio = load_portfolio(account_name)

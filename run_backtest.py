@@ -1,4 +1,3 @@
-from dotenv import load_dotenv
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.runtime_support import (
@@ -11,8 +10,7 @@ import sys
 
 def run_backtest(ticker, trade_date):
     print(f"\n--- Starting Backtest for {ticker} on {trade_date} ---")
-    load_dotenv()
-    
+
     config = build_runtime_config(DEFAULT_CONFIG, ticker, max_debate_rounds=2)
         
     ta = TradingAgentsGraph(debug=False, config=config)

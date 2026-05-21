@@ -1,5 +1,4 @@
 import json
-from dotenv import load_dotenv
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.runtime_support import (
@@ -8,9 +7,6 @@ from tradingagents.runtime_support import (
     export_json,
     ticker_filename,
 )
-
-# Load the environment variables from the .env file
-load_dotenv()
 
 import sys
 from datetime import datetime
