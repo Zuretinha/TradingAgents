@@ -19,6 +19,16 @@ from tradingagents.runtime_support import (
     utc_now_iso,
 )
 
+PORTFOLIO_ACCOUNT_EXPORT_KEYS = {
+    "account_name",
+    "account_type",
+    "financial_year_end",
+    "total_value_aud",
+    "realised_gains_ytd_aud",
+    "smsf_constraints",
+    "evidence_gaps",
+}
+
 
 def load_portfolio(account_name: str) -> dict:
     """Load a portfolio JSON file by account name."""
@@ -37,6 +47,15 @@ def build_config(ticker: str) -> dict:
     return build_runtime_config(DEFAULT_CONFIG, ticker, max_debate_rounds=2)
 
 
+def build_account_snapshot(portfolio: dict) -> dict:
+    """Keep per-holding exports limited to the account fields runtime consumers need."""
+    return {
+        key: value
+        for key, value in portfolio.items()
+        if key in PORTFOLIO_ACCOUNT_EXPORT_KEYS
+    }
+
+
 def calculate_holding_context(holding: dict, portfolio: dict) -> str:
     """Build a context string describing the holding within the portfolio."""
     account_name = portfolio["account_name"]
@@ -46,9 +65,10 @@ def calculate_holding_context(holding: dict, portfolio: dict) -> str:
     fy_end = portfolio.get("financial_year_end", "2026-06-30")
 
     units = holding.get("units", 0)
-    cost_basis = holding.get("cost_basis_per_unit", 0)
-    acq_date = holding.get("acquisition_date", "unknown")
-    total_cost = units * cost_basis
+    cost_basis = holding.get("cost_basis_per_unit")
+    cost_basis_known = isinstance(cost_basis, (int, float)) and cost_basis > 0
+    acq_date = holding.get("acquisition_date") or "unknown"
+    total_cost = units * cost_basis if cost_basis_known else None
 
     # Calculate holding period
     holding_period = "unknown"
@@ -65,13 +85,21 @@ def calculate_holding_context(holding: dict, portfolio: dict) -> str:
     # Calculate allocation percentage
     allocation_pct = "unknown"
     if total_value and total_value > 0:
-        current_value = units * holding.get("current_price", cost_basis)
-        allocation_pct = f"{(current_value / total_value) * 100:.1f}%"
+        current_price = holding.get("current_price")
+        if isinstance(current_price, (int, float)) and current_price > 0:
+            current_value = units * current_price
+            allocation_pct = f"{(current_value / total_value) * 100:.1f}%"
+        elif cost_basis_known:
+            current_value = units * cost_basis
+            allocation_pct = f"{(current_value / total_value) * 100:.1f}%"
+
+    cost_basis_text = f"${cost_basis:.2f}/unit" if cost_basis_known else "unknown"
+    total_cost_text = f"${total_cost:.2f}" if total_cost is not None else "unknown"
 
     context = (
         f"\n--- PORTFOLIO CONTEXT ---\n"
         f"Account: {account_name} ({account_type})\n"
-        f"Units held: {units} | Cost basis: ${cost_basis:.2f}/unit | Total cost: ${total_cost:.2f}\n"
+        f"Units held: {units} | Cost basis: {cost_basis_text} | Total cost: {total_cost_text}\n"
         f"Acquisition date: {acq_date} | Holding period: {holding_period}\n"
         f"CGT 50% discount eligible: {'Yes' if cgt_discount else 'No'}\n"
         f"Portfolio allocation: {allocation_pct}\n"
@@ -126,11 +154,7 @@ def run_portfolio_analysis(account_name: str, trade_date: str = None):
         config = build_config(ticker)
         portfolio_context = calculate_holding_context(holding, portfolio)
         portfolio_record = {
-            "account": {
-                key: value
-                for key, value in portfolio.items()
-                if key != "holdings"
-            },
+            "account": build_account_snapshot(portfolio),
             "holding": holding,
         }
 

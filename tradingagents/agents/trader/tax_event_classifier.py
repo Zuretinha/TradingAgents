@@ -40,11 +40,20 @@ def create_tax_event_classifier(llm, config=None):
         account = portfolio_context["account"]
 
         acq_date = holding.get("acquisition_date", "")
-        cost_basis = holding.get("cost_basis_per_unit", 0)
+        cost_basis = holding.get("cost_basis_per_unit")
         units = holding.get("units", 0)
         account_type = account.get("account_type", "personal")
         realised_ytd = account.get("realised_gains_ytd_aud", 0)
         fy_end = account.get("financial_year_end", "2026-06-30")
+
+        if not isinstance(cost_basis, (int, float)) or cost_basis <= 0:
+            return {
+                "tax_event_signal": (
+                    f"Tax review limited for {ticker} — governed portfolio data was found, "
+                    "but cost basis is missing or unresolved, so disposal tax estimation "
+                    "failed closed instead of inventing a gain or loss."
+                )
+            }
 
         # Holding period calculation
         holding_period_days = 0
