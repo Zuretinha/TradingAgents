@@ -1,31 +1,38 @@
+from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
 from tradingagents.agents.utils.agent_utils import (
-    build_instrument_context,
     get_balance_sheet,
     get_cashflow,
     get_fundamentals,
     get_income_statement,
-    get_insider_transactions,
+    get_instrument_context_from_state,
     get_language_instruction,
 )
-from tradingagents.dataflows.config import get_config
 
 
 def create_fundamentals_analyst(llm):
     def fundamentals_analyst_node(state):
         current_date = state["trade_date"]
         ticker = state["company_of_interest"]
-        instrument_context = build_instrument_context(ticker)
+        asset_type = state.get("asset_type", "stock")
 
-        # WP-04: Crypto Bypass
-        if ticker.endswith("-USD") or ticker.endswith("-AUD") or ticker.endswith("-EUR"):
-            from langchain_core.messages import AIMessage
-            skip_msg = AIMessage(content="Fundamentals Analyst bypassed: Ticker is a cryptocurrency. Cryptocurrencies do not have traditional SEC financial statements (Balance Sheet, Income Statement, Cash Flow). Rely on the Macro Strategist, Whale Tracker, and Volatility Analyst for core network evaluation.")
+        if asset_type == "crypto" or ticker.endswith("-USD") or ticker.endswith("-AUD") or ticker.endswith("-EUR"):
+            skip_msg = AIMessage(
+                content=(
+                    "Fundamentals Analyst bypassed: Ticker is a cryptocurrency. "
+                    "Cryptocurrencies do not have traditional SEC financial "
+                    "statements (Balance Sheet, Income Statement, Cash Flow). "
+                    "Rely on the Macro Strategist, Whale Tracker, and Volatility "
+                    "Analyst for core network evaluation."
+                )
+            )
             return {
                 "messages": [skip_msg],
                 "fundamentals_report": skip_msg.content,
             }
 
+        instrument_context = get_instrument_context_from_state(state)
         tools = [
             get_fundamentals,
             get_balance_sheet,
@@ -50,8 +57,9 @@ def create_fundamentals_analyst(llm):
                     " will help where you left off. Execute what you can to make progress."
                     " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
                     " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
-                    " You have access to the following tools: {tool_names}.\n{system_message}"
-                    "For your reference, the current date is {current_date}. {instrument_context}",
+                    " You have access to the following tools: {tool_names}."
+                    " Today's date is {current_date}; treat it as 'now' for all analysis and tool-call date ranges. {instrument_context}\n"
+                    "{system_message}",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]

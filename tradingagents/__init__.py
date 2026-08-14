@@ -1,3 +1,4 @@
+import contextlib
 import warnings
 
 from ._env_bootstrap import bootstrap_runtime_env
@@ -9,10 +10,8 @@ bootstrap_runtime_env()
 # subclassed warning categories. To suppress a specific warning we must
 # install our filter AFTER langchain-core has installed its own, so import
 # it first. The package is a guaranteed transitive dep via langgraph.
-try:
+with contextlib.suppress(ImportError):
     import langchain_core  # noqa: F401
-except ImportError:
-    pass
 
 # langgraph-checkpoint 4.0.3 calls Reviver() at module load without an
 # explicit allowed_objects, which triggers a noisy pending-deprecation

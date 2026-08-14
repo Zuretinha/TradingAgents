@@ -1,11 +1,8 @@
 # TradingAgents/graph/propagation.py
 
-from typing import Dict, Any, List, Optional
-from tradingagents.agents.utils.agent_states import (
-    AgentState,
-    InvestDebateState,
-    RiskDebateState,
-)
+from typing import Any
+
+from tradingagents.agents.utils.agent_states import InvestDebateState, RiskDebateState
 
 
 class Propagator:
@@ -21,16 +18,28 @@ class Propagator:
         trade_date: str,
         past_context: str = "",
         portfolio_context: str = "",
-        portfolio_record: Dict[str, Any] | None = None,
-    ) -> Dict[str, Any]:
+        portfolio_record: dict[str, Any] | None = None,
+        asset_type: str = "stock",
+        instrument_context: str = "",
+    ) -> dict[str, Any]:
         """Create the initial state for the agent graph."""
         return {
             "messages": [("human", company_name)],
             "company_of_interest": company_name,
+            "asset_type": asset_type,
+            "instrument_context": instrument_context,
             "trade_date": str(trade_date),
             "past_context": past_context,
             "portfolio_context": portfolio_context,
             "portfolio_record": portfolio_record or {},
+            "sender": "",
+            "market_report": "",
+            "fundamentals_report": "",
+            "sentiment_report": "",
+            "news_report": "",
+            "macro_report": "",
+            "whale_report": "",
+            "volatility_report": "",
             "investment_debate_state": InvestDebateState(
                 {
                     "bull_history": "",
@@ -41,6 +50,10 @@ class Propagator:
                     "count": 0,
                 }
             ),
+            "investment_plan": "",
+            "trader_investment_plan": "",
+            "execution_plan": "",
+            "tax_event_signal": "",
             "risk_debate_state": RiskDebateState(
                 {
                     "aggressive_history": "",
@@ -55,13 +68,10 @@ class Propagator:
                     "count": 0,
                 }
             ),
-            "market_report": "",
-            "fundamentals_report": "",
-            "sentiment_report": "",
-            "news_report": "",
+            "final_trade_decision": "",
         }
 
-    def get_graph_args(self, callbacks: Optional[List] = None) -> Dict[str, Any]:
+    def get_graph_args(self, callbacks: list | None = None) -> dict[str, Any]:
         """Get arguments for the graph invocation.
 
         Args:
