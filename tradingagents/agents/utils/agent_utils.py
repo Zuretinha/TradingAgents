@@ -38,13 +38,14 @@ def get_language_instruction() -> str:
 
 def build_instrument_context(ticker: str) -> str:
     """Describe the exact instrument so agents preserve exchange-qualified tickers."""
+    import os
+
     base_context = (
         f"The instrument to analyze is `{ticker}`. "
         "Use this exact ticker in every tool call, report, and recommendation, "
         "preserving any exchange suffix (e.g. `.TO`, `.L`, `.HK`, `.T`)."
     )
     if ticker.endswith(".AX"):
-        import os
         try:
             prompt_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "07_prompts", "asx_context_prompt.md"))
             with open(prompt_path, "r", encoding="utf-8") as f:
@@ -53,7 +54,6 @@ def build_instrument_context(ticker: str) -> str:
         except Exception:
             pass
     elif ticker.endswith("-USD") or ticker.endswith("-AUD") or ticker.endswith("-EUR"):
-        import os
         try:
             prompt_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "07_prompts", "crypto_context_prompt.md"))
             with open(prompt_path, "r", encoding="utf-8") as f:
@@ -61,7 +61,16 @@ def build_instrument_context(ticker: str) -> str:
             base_context += f"\n\n{crypto_context}"
         except Exception:
             pass
+    else:
+        try:
+            prompt_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "07_prompts", "equity_context_prompt.md"))
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                equity_context = f.read()
+            base_context += f"\n\n{equity_context}"
+        except Exception:
+            pass
     return base_context
+
 
 def create_msg_delete():
     def delete_messages(state):
@@ -77,6 +86,3 @@ def create_msg_delete():
         return {"messages": removal_operations + [placeholder]}
 
     return delete_messages
-
-
-        
