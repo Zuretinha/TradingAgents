@@ -8,6 +8,28 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.fixture(autouse=True)
+def _restore_module_state_after_test():
+    """Prevent dynamic-import stubs from leaking into later upstream tests."""
+    prefix_names = {
+        name: module
+        for name, module in sys.modules.items()
+        if name.startswith("tradingagents")
+        or name in {"run_portfolio_under_test", "tax_event_classifier_under_test"}
+    }
+    yield
+    current_names = {
+        name
+        for name in sys.modules
+        if name.startswith("tradingagents")
+        or name in {"run_portfolio_under_test", "tax_event_classifier_under_test"}
+    }
+    for name in current_names - prefix_names.keys():
+        sys.modules.pop(name, None)
+    for name, module in prefix_names.items():
+        sys.modules[name] = module
+
+
 def _load_run_portfolio_module():
     fake_graph = types.ModuleType("tradingagents.graph.trading_graph")
     fake_graph.TradingAgentsGraph = object
